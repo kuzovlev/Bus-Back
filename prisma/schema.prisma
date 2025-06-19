@@ -1,0 +1,438 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+    USER
+    VENDOR
+    ADMIN
+    DRIVER
+}
+
+enum VendorStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+}
+
+enum VehicleStatus {
+    AVAILABLE
+    BOOKED
+    MAINTENANCE
+    INACTIVE
+}
+
+enum GearSystem {
+    MANUAL
+    AUTOMATIC
+    SEMI_AUTOMATIC
+}
+
+enum FuelType {
+    PETROL
+    DIESEL
+    ELECTRIC
+    HYBRID
+    CNG
+}
+
+enum BusType {
+    AC_SLEEPER
+    NON_AC_SLEEPER
+    AC_SEATER
+}
+
+enum ScheduleStatus {
+    ACTIVE
+    CANCELLED
+    COMPLETED
+}
+
+enum BookingStatus {
+    PENDING
+    CONFIRMED
+    CANCELLED
+}
+
+enum CategoryType {
+    INCOME
+    EXPENSE
+}
+
+enum SettingType {
+    TEXT
+    IMAGE
+    JSON
+    BOOLEAN
+    NUMBER
+}
+
+enum DrivingStatus {
+    AVAILABLE
+    ON_TRIP
+    OFF_DUTY
+}
+
+enum DriverVehicleAssignedStatus {
+    ACTIVE
+    INACTIVE
+    COMPLETED
+}
+
+// Models
+model User {
+    id                    String                  @id @default(cuid())
+    email                 String                  @unique
+    password              String
+    avatar                String?
+    mobile                String                  @unique
+    firstName             String                  @map("first_name")
+    lastName              String                  @map("last_name")
+    gender                String?
+    mobileOtp             String?                 @map("mobile_otp")
+    role                  UserRole                @default(USER)
+    active                Boolean                 @default(true)
+    loginAttempts         Int                     @default(0) @map("login_attempts")
+    loginAttemptsDate     DateTime?               @map("login_attempts_date")
+    expiry                DateTime?
+    createdAt             DateTime                @default(now()) @map("created_at")
+    updatedAt             DateTime                @updatedAt @map("updated_at")
+    vendor                Vendor? // One-to-one relation with Vendor
+    bookings              Booking[]
+    routes                Route[]
+    vehicles              Vehicle[]
+    BusSchedule           BusSchedule[]
+    Driver                Driver[]
+    DriverVehicleAssigned DriverVehicleAssigned[]
+
+    @@map("users")
+}
+
+model Vendor {
+    id              String        @id @default(cuid())
+    businessName    String        @map("business_name")
+    businessEmail   String?       @unique @map("business_email")
+    businessMobile  String?       @map("business_mobile")
+    businessAddress String?       @map("business_address")
+    businessLogo    String?       @map("business_logo")
+    status          VendorStatus  @default(ACTIVE)
+    userId          String        @unique @map("user_id") // Foreign key to User
+    user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    createdAt       DateTime      @default(now()) @map("created_at")
+    updatedAt       DateTime      @updatedAt @map("updated_at")
+    bookings        Booking[]
+    paymentTypes    PaymentType[]
+
+    @@map("vendors")
+}
+
+model Vehicle {
+    id                    String                  @id @default(cuid())
+    vehicleName           String                  @map("vehicle_name")
+    vehicleNumber         String                  @unique @map("vehicle_number")
+    vehicleImage          String?                 @map("vehicle_image")
+    vehicleStatus         VehicleStatus           @default(AVAILABLE) @map("vehicle_status")
+    vehicleRating         Decimal?                @map("vehicle_rating") @db.Decimal(2, 1)
+    totalSeats            Int                     @map("total_seats")
+    startDate             DateTime?               @map("start_date")
+    hasAc                 Boolean                 @default(false) @map("has_ac")
+    driverName            String?                 @map("driver_name")
+    driverMobile          String?                 @map("driver_mobile")
+    gearSystem            GearSystem?
+    amenities             Json?
+    vehicleType           String                  @map("vehicle_type")
+    vehicleBrand          String?                 @map("vehicle_brand")
+    availableCity         String?                 @map("available_city")
+    fuelType              FuelType?               @map("fuel_type")
+    userId                String?                 @map("user_id")
+    routeId               String?                 @map("route_id")
+    layoutId              String?                 @map("layout_id")
+    createdAt             DateTime                @default(now()) @map("created_at")
+    updatedAt             DateTime                @updatedAt @map("updated_at")
+    user                  User?                   @relation(fields: [userId], references: [id])
+    route                 Route?                  @relation(fields: [routeId], references: [id])
+    layout                BusLayout?              @relation(fields: [layoutId], references: [id])
+    bookings              Booking[]
+    schedules             BusSchedule[]           @relation("ScheduleVehicles")
+    DriverVehicleAssigned DriverVehicleAssigned[]
+
+    @@map("vehicles")
+}
+
+model Route {
+    id              String          @id @default(cuid())
+    sourceCity      String          @map("source_city")
+    destinationCity String          @map("destination_city")
+    distance        Decimal?        @db.Decimal(10, 2)
+    isActive        Boolean         @default(true) @map("is_active")
+    userId          String?         @map("user_id")
+    createdAt       DateTime        @default(now()) @map("created_at")
+    updatedAt       DateTime        @updatedAt @map("updated_at")
+    user            User?           @relation(fields: [userId], references: [id])
+    vehicles        Vehicle[]
+    boardingPoints  BoardingPoint[]
+    droppingPoints  DroppingPoint[]
+    busSchedules    BusSchedule[]
+    bookings        Booking[]
+
+    @@unique([sourceCity, destinationCity])
+    @@map("routes")
+}
+
+model BoardingPoint {
+    id             String    @id @default(cuid())
+    routeId        String    @map("route_id")
+    locationName   String    @map("location_name")
+    arrivalTime    DateTime? @map("arrival_time")
+    sequenceNumber Int?      @map("sequence_number")
+    createdAt      DateTime  @default(now()) @map("created_at")
+    updatedAt      DateTime  @updatedAt @map("updated_at")
+    route          Route     @relation(fields: [routeId], references: [id])
+    bookings       Booking[]
+
+    @@map("boarding_points")
+}
+
+model DroppingPoint {
+    id             String    @id @default(cuid())
+    routeId        String    @map("route_id")
+    locationName   String    @map("location_name")
+    arrivalTime    DateTime? @map("arrival_time")
+    sequenceNumber Int?      @map("sequence_number")
+    createdAt      DateTime  @default(now()) @map("created_at")
+    updatedAt      DateTime  @updatedAt @map("updated_at")
+    route          Route     @relation(fields: [routeId], references: [id])
+    bookings       Booking[]
+
+    @@map("dropping_points")
+}
+
+model BusLayout {
+    id             String    @id @default(cuid())
+    layoutName     String?   @map("layout_name")
+    totalSeats     Int       @map("total_seats")
+    sleeperSeats   Int       @map("sleeper_seats")
+    seaterSeats    Int       @map("seater_seats")
+    hasUpperDeck   Boolean   @default(false) @map("has_upper_deck")
+    upperDeckSeats Int       @default(0) @map("upper_deck_seats")
+    sleeperPrice   Decimal   @map("sleeper_price") @db.Decimal(10, 2)
+    seaterPrice    Decimal   @map("seater_price") @db.Decimal(10, 2)
+    rowCount       Int       @map("row_count")
+    columnCount    Int       @map("column_count")
+    layoutJson     Json      @map("layout_json")
+    isActive       Boolean   @default(true) @map("is_active")
+    userId         String?   @map("user_id")
+    createdAt      DateTime  @default(now()) @map("created_at")
+    vehicles       Vehicle[]
+
+    @@map("bus_layouts")
+}
+
+model BusSchedule {
+    id             String         @id @default(cuid())
+    routeId        String         @map("route_id")
+    userId         String         @map("user_id")
+    vehicleId      String?        @map("vehicle_id")
+    departureTime  DateTime       @map("departure_time")
+    arrivalTime    DateTime       @map("arrival_time")
+    busType        BusType
+    departureDate  DateTime       @map("departure_date")
+    arrivalDate    DateTime       @map("arrival_date")
+    availableSeats Int            @default(0) @map("available_seats")
+    status         ScheduleStatus @default(ACTIVE)
+    isActive       Boolean        @default(true) @map("is_active")
+    createdAt      DateTime       @default(now()) @map("created_at")
+    updatedAt      DateTime       @updatedAt @map("updated_at")
+    route          Route          @relation(fields: [routeId], references: [id])
+    user           User           @relation(fields: [userId], references: [id])
+    vehicles       Vehicle[]      @relation("ScheduleVehicles")
+
+    @@map("bus_schedules")
+}
+
+model Booking {
+    id                 String         @id @default(cuid())
+    userId             String?        @map("user_id")
+    vendorId           String?        @map("vendor_id")
+    vehicleId          String?        @map("vehicle_id")
+    routeId            String?        @map("route_id")
+    boardingPointId    String?        @map("boarding_point_id")
+    droppingPointId    String?        @map("dropping_point_id")
+    bookingDate        DateTime?      @map("booking_date")
+    totalAmount        Decimal        @map("total_amount") @db.Decimal(10, 2)
+    discountAmount     Decimal        @default(0) @map("discount_amount") @db.Decimal(10, 2)
+    finalAmount        Decimal        @map("final_amount") @db.Decimal(10, 2)
+    paymentMethod      String         @default("CASH") @map("payment_method")
+    paymentStatus      String         @default("PENDING") @map("payment_status")
+    paymentIntentId    String?        @map("payment_intent_id")
+    seatNumbers        Json?          @map("seat_numbers")
+    status             BookingStatus  @default(CONFIRMED)
+    cancellationReason String?        @map("cancellation_reason")
+    cancellationCharge Decimal?       @map("cancellation_charge") @db.Decimal(10, 2)
+    refundAmount       Decimal?       @map("refund_amount") @db.Decimal(10, 2)
+    createdAt          DateTime       @default(now()) @map("created_at")
+    updatedAt          DateTime       @updatedAt @map("updated_at")
+    user               User?          @relation(fields: [userId], references: [id])
+    vendor             Vendor?        @relation(fields: [vendorId], references: [userId])
+    vehicle            Vehicle?       @relation(fields: [vehicleId], references: [id])
+    route              Route?         @relation(fields: [routeId], references: [id])
+    boardingPoint      BoardingPoint? @relation(fields: [boardingPointId], references: [id])
+    droppingPoint      DroppingPoint? @relation(fields: [droppingPointId], references: [id])
+
+    @@map("bookings")
+}
+
+model PaymentType {
+    id            String   @id @default(cuid())
+    paymentMethod String   @unique @map("payment_method")
+    description   String?
+    vendorId      String?  @map("vendor_id")
+    isActive      Boolean  @default(true) @map("is_active")
+    createdAt     DateTime @default(now()) @map("created_at")
+    updatedAt     DateTime @updatedAt @map("updated_at")
+    vendor        Vendor?  @relation(fields: [vendorId], references: [id])
+
+    @@map("payment_types")
+}
+
+model Menu {
+    id        String   @id @default(cuid())
+    name      String
+    display   Boolean  @default(true)
+    role      UserRole
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("menus")
+}
+
+model CustomField {
+    id           String   @id @default(cuid())
+    name         String
+    customFields Json?    @map("custom_fields")
+    createdAt    DateTime @default(now()) @map("created_at")
+    updatedAt    DateTime @updatedAt @map("updated_at")
+
+    @@map("custom_fields")
+}
+
+model Category {
+    id             String          @id @default(cuid())
+    userId         String          @map("user_id")
+    name           String
+    type           CategoryType
+    createdAt      DateTime        @default(now()) @map("created_at")
+    updatedAt      DateTime        @updatedAt @map("updated_at")
+    incomeExpenses IncomeExpense[]
+
+    @@map("categories")
+}
+
+model IncomeExpense {
+    id              String   @id @default(cuid())
+    userId          String
+    categoryId      String   @map("category_id")
+    amount          Decimal  @db.Decimal(10, 2)
+    description     String?
+    transactionDate DateTime @map("transaction_date")
+    createdAt       DateTime @default(now()) @map("created_at")
+    category        Category @relation(fields: [categoryId], references: [id])
+
+    @@map("income_expenses")
+}
+
+model Setting {
+    id          String      @id @default(cuid())
+    keyName     String      @unique @map("key_name")
+    value       String
+    type        SettingType
+    description String?
+    createdAt   DateTime    @default(now()) @map("created_at")
+    updatedAt   DateTime    @updatedAt @map("updated_at")
+
+    @@map("settings")
+}
+
+model Language {
+    id           String        @id @default(cuid())
+    languageCode String        @unique @map("language_code")
+    languageName String        @map("language_name")
+    isActive     Boolean       @default(true) @map("is_active")
+    createdAt    DateTime      @default(now()) @map("created_at")
+    translations Translation[]
+
+    @@map("languages")
+}
+
+model Translation {
+    id             String   @id @default(cuid())
+    entityName     String   @map("entity_name")
+    entityId       String   @map("entity_id")
+    keyName        String   @map("key_name")
+    languageCode   String   @map("language_code")
+    translatedText String   @map("translated_text")
+    createdAt      DateTime @default(now()) @map("created_at")
+    language       Language @relation(fields: [languageCode], references: [languageCode])
+
+    @@unique([entityName, entityId, keyName, languageCode])
+    @@map("translations")
+}
+
+model Amenities {
+    id        String   @id @default(cuid())
+    name      String   @unique
+    icon      String
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("amenities")
+}
+
+model Driver {
+    id                    String                  @id @default(cuid())
+    vendorId              String
+    name                  String
+    totalTravel           Int                     @default(0) @map("total_travel")
+    email                 String?                 @unique
+    phone                 String                  @unique
+    driverPhoto           String?                 @map("driver_photo")
+    driverLicenseBack     String?                 @map("driver_license_back")
+    driverLicenseFront    String?                 @map("driver_license_front")
+    password              String
+    licenseNumber         String                  @unique
+    licenseExpiryDate     DateTime
+    address               String?
+    status                VendorStatus            @default(ACTIVE)
+    drivingStatus         DrivingStatus           @default(AVAILABLE)
+    createdAt             DateTime                @default(now()) @map("created_at")
+    updatedAt             DateTime                @updatedAt @map("updated_at")
+    user                  User                    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+    DriverVehicleAssigned DriverVehicleAssigned[]
+
+    @@map("drivers")
+}
+
+model DriverVehicleAssigned {
+    id           String                      @id @default(cuid())
+    vendorId     String                      @map("vendor_id")
+    driverId     String                      @map("driver_id")
+    vehicleId    String                      @map("vehicle_id")
+    assignedFrom DateTime                    @map("assigned_from")
+    assignedTo   DateTime?                   @map("assigned_to")
+    status       DriverVehicleAssignedStatus @default(ACTIVE)
+    createdAt    DateTime                    @default(now()) @map("created_at")
+    updatedAt    DateTime                    @updatedAt @map("updated_at")
+
+    user    User    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+    driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Cascade)
+    vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+    @@map("driver_vehicle_assigned")
+}
